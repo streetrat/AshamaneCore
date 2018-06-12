@@ -2835,7 +2835,7 @@ public:
         Field* fields = result->Fetch();
         uint32 acctCharCount = fields[0].GetDouble();
 
-        if (acctCharCount >= sWorld->getIntConfig(CONFIG_CHARACTERS_PER_ACCOUNT))
+        if (acctCharCount >= sWorld->getIntConfig(CONFIG_CHARACTERS_PER_REALM))
         {
             handler->PSendSysMessage("You have the maximum number of characters (%u)", acctCharCount);
             handler->SetSentErrorMessage(true);

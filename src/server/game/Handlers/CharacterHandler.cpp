@@ -347,6 +347,9 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
 void WorldSession::HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& /*enumCharacters*/)
 {
+    // do old character imports before listing characters
+    CheckImport();
+
     // remove expired bans
     PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_EXPIRED_BANS);
     CharacterDatabase.Execute(stmt);
@@ -2516,4 +2519,80 @@ void WorldSession::SendUndeleteCharacterResponse(CharacterUndeleteResult result,
     response.Result = result;
 
     SendPacket(response.Write());
+}
+
+void WorldSession::CheckImport()
+{
+    uint32 accountId = GetAccountId();
+
+    QueryResult result = LoginDatabase.PQuery("SELECT SUM(numchars) FROM realmcharacters WHERE acctid = %u", accountId);
+    uint32 acctCharCount = 0;
+    if (result)
+    {
+        Field* fields = result->Fetch();
+        acctCharCount = fields[0].GetDouble();
+    }
+
+    result = LoginDatabase.PQuery("SELECT CharGuid, State FROM import WHERE AccountId = %u", accountId);
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint64 guid = fields[0].GetUInt64();
+            uint8 state = fields[1].GetUInt8();
+
+            switch (state)
+            {
+                case 0: // new
+                {
+                    LoginDatabase.DirectPExecute("UPDATE import SET state = 1 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
+                    if (acctCharCount >= sWorld->getIntConfig(CONFIG_CHARACTERS_PER_REALM))
+                    {
+                        TC_LOG_ERROR("import", "WorldSession::CheckImport: Account %u has max number of characters (%u) on realm", accountId, acctCharCount);
+                        LoginDatabase.DirectPExecute("UPDATE import SET state = 4 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
+                        continue;
+                    }
+                    // import new character to account
+                    Player newChar(this);
+                    newChar.GetMotionMaster()->Initialize();
+                    if (!newChar.Import(sObjectMgr->GetGenerator<HighGuid::Player>().Generate(), guid))
+                    {
+                        TC_LOG_ERROR("import", "WorldSession::CheckImport: Could not import character %u for account %u", guid, accountId);
+                        LoginDatabase.DirectPExecute("UPDATE import SET state = 3 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
+                        newChar.CleanupsBeforeDelete();
+                        continue;
+                    }
+
+                    sWorld->AddCharacterInfo(newChar.GetGUID(), accountId, newChar.GetName(), newChar.GetByteValue(PLAYER_BYTES_3, PLAYER_BYTES_3_OFFSET_GENDER), newChar.getRace(), newChar.getClass(), newChar.getLevel(), false);
+
+                    newChar.CleanupsBeforeDelete();
+                    LoginDatabase.DirectPExecute("UPDATE import SET state = 2 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
+                    TC_LOG_INFO("import", "Sucessfully imported character %s with guid %u for account %u)", newChar.GetName(), guid, accountId);
+                    break;
+                }
+                case 1: // started
+                {
+                    // import in progress, ignore, log error, probably failed to import
+                    TC_LOG_ERROR("import", "WorldSession::CheckImport: Found unfinished import for account id %u guid %u", accountId, guid);
+                    break;
+                }
+                case 2: // finished successfully
+                {
+                    // already imported nothing to do
+                    break;
+                }
+                case 3: // import failed
+                {
+                    // nothing to do
+                    break;
+                }
+                case 4: // import failed, too many character
+                {
+                    // nothing to do
+                    break;
+                }
+            }
+        } while (result->NextRow());
+    }
 }

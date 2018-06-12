@@ -29740,6 +29740,39 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
         } while (result->NextRow());
     }
 
+    std::vector<uint32>depricatedQuests = {
+        5061,   // Aquatic Form
+        31,     // Aquatic Form
+        11001,  // Travel Form
+        10831,  // Mooncloth Tailoring
+        26801,  // Shadoweave Tailoring
+        10833,  // Spellfire Tailoring
+        5144,   // Elemental Leatherworking
+        5146,   // Elemental Leatherworking
+        5141,   // Dragonscale Leatherworking
+        5145,   // Dragonscale Leatherworking
+        5143,   // Tribal Leatherworking
+        5148,   // Tribal Leatherworking
+        10897,  // Potion Master
+        29067,  // Potion Master
+        10902,  // Elixir Master
+        29068,  // Elixir Master
+        29069,  // Elixir Master
+        29481,  // Elixir Master
+        10899,  // Transmutation Master
+        29482,  // Transmutation Master
+        3641,   // Gnomish Engineer
+        3643,   // Gnomish Engineer
+        29476,  // Gnomish Engineer
+        29477,  // Gnomish Engineer
+        3639,   // Goblin Engineer
+        29475,  // Goblin Engineer
+        5284,   // Weaponsmith
+        5302,   // Weaponsmith
+        5283,   // Armorsmith
+        5301    // Armorsmith
+    };
+
     result = CharacterDatabase.PQuery("SELECT quest FROM tfm_character_queststatus_rewarded WHERE guid = %u", oldGuid);
     if (result)
     {
@@ -29747,6 +29780,11 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
         {
             Field* fields = result->Fetch();
             uint32 questId = fields[0].GetUInt32();
+
+            // ignore some problematic quests
+            if (std::find(depricatedQuests.begin(), depricatedQuests.end(), questId) != depricatedQuests.end())
+                continue;
+
             Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
             if (quest)
             {
@@ -29832,12 +29870,6 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
                 }
             }
         } while (result->NextRow());
-    }
-
-    // remove depricated spells if it was learned from quests, achievements or other sources
-    for (uint32 spellId : depricatedSpells)
-    {
-        RemoveSpell(spellId, false);
     }
 
     SetBankBagSlotCount(7);
@@ -30041,8 +30073,25 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     LearnDefaultSkills();
     LearnCustomSpells();
 
-    Relocate(info->positionX, info->positionY, info->positionZ, info->orientation);
+    // remove depricated spells if it was learned from quests, achievements or other sources
+    for (uint32 spellId : depricatedSpells)
+    {
+        RemoveSpell(spellId, false);
+    }
 
+    RemoveAllAuras();
+    if (IsInHorde())
+    {
+        SetMap(sMapMgr->CreateMap(1, this)); // Kalimdor
+        Relocate(1569.969971f, -4397.410156f, 16.047199f, 0.543025f);
+    }
+    else
+    {
+        SetMap(sMapMgr->CreateMap(0, this)); // Eastern Kingdoms
+        Relocate(-8833.070313f, 622.778015f, 93.931702f, 0.571071f);
+    }
+
+    setCinematic(1); // do not show character intro, will be broken if not spawned at original starting place
 
     if (ChrSpecializationEntry const* defaultSpec = sDB2Manager.GetDefaultChrSpecializationForClass(getClass()))
     {
