@@ -29541,3 +29541,534 @@ uint8 Player::GetItemLimitCategoryQuantity(ItemLimitCategoryEntry const* limitEn
 
     return limit;
 }
+
+bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
+{
+    Object::_Create(ObjectGuid::Create<HighGuid::Player>(guidlow));
+
+    //                                                   0        1     2     3      4       5      6   7      8            9             10           11          12          13          14   15           16        17         18         19             20            21
+    QueryResult result = CharacterDatabase.PQuery("SELECT account, name, race, class, gender, level, xp, money, playerBytes, playerBytes2, playerFlags, position_x, position_y, position_z, map, orientation, taximask, totaltime, leveltime, exploredZones, knownTitles, logout_time FROM tfm_characters WHERE guid = %u", oldGuid);
+    if (!result)
+    {
+        TC_LOG_ERROR("import", "Player::Import: Guid %u not found in import table", oldGuid);
+        return false;
+    }
+    Field* fields = result->Fetch();
+
+    uint32 accountId = fields[0].GetUInt32();
+    m_name = fields[1].GetString();
+    uint8 race = fields[2].GetUInt8();
+    uint8 _class = fields[3].GetUInt8();
+    uint8 gender = fields[4].GetUInt8();
+    uint32 start_level = fields[5].GetUInt8();
+    uint32 xp = fields[6].GetUInt32();
+    uint64 money = fields[7].GetUInt64();
+    uint32 playerBytes = fields[8].GetUInt32();
+    uint32 playerBytes2 = fields[9].GetUInt32();
+
+    float x = fields[11].GetFloat();
+    float y = fields[12].GetFloat();
+    float z = fields[13].GetFloat();
+    uint32 map = fields[14].GetUInt32();
+    float o = fields[15].GetFloat();
+
+    std::string taxiMask = fields[16].GetString();
+    std::string exploredZones = fields[19].GetString();
+    std::string titles = fields[20].GetString();
+
+    uint32 totalTime = fields[17].GetUInt32();
+    uint32 levelTime = fields[18].GetUInt32();
+
+    uint8 skin = 0;
+    uint8 face = 0;
+    uint8 hairStyle = 0;
+    uint8 hairColor = 0;
+    uint8 facialHairStyle = 0;
+
+    PlayerInfo const* info = sObjectMgr->GetPlayerInfo(race, _class);
+    if (!info)
+    {
+        TC_LOG_ERROR("import", "Player::Import: Account %u tried to create a character named '%s' with an invalid race/class pair (%u/%u) - refusing to do so.",
+            GetSession()->GetAccountId(), m_name.c_str(), race, _class);
+        return false;
+    }
+
+    for (uint8 i = 0; i < PLAYER_SLOTS_COUNT; i++)
+        m_items[i] = nullptr;
+
+    ChrClassesEntry const* cEntry = sChrClassesStore.LookupEntry(_class);
+    if (!cEntry)
+    {
+        TC_LOG_ERROR("import", "Player::Import: Account %u tried to create a character named '%s' with an invalid character class (%u) - refusing to do so.",
+            GetSession()->GetAccountId(), m_name.c_str(), _class);
+        return false;
+    }
+
+    SetMap(sMapMgr->CreateMap(info->mapId, this));
+
+    SetInt32Value(PLAYER_BYTES, playerBytes);
+    SetInt32Value(PLAYER_BYTES_2, playerBytes2);
+
+    uint8 powertype = cEntry->DisplayPower;
+
+    SetObjectScale(1.0f);
+
+    setFactionForRace(race);
+
+    if (!IsValidGender(gender))
+    {
+        TC_LOG_ERROR("import", "Player::Import: Account %u tried to create a character named '%s' with an invalid gender (%u) - refusing to do so",
+            GetSession()->GetAccountId(), m_name.c_str(), gender);
+        return false;
+    }
+
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_RACE, race);
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, _class);
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, gender);
+    SetUInt32Value(UNIT_FIELD_DISPLAY_POWER, powertype);
+    InitDisplayIds();
+    if (sWorld->getIntConfig(CONFIG_GAME_TYPE) == REALM_TYPE_PVP || sWorld->getIntConfig(CONFIG_GAME_TYPE) == REALM_TYPE_RPPVP)
+    {
+        SetByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_PVP);
+        SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
+    }
+
+    SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
+    SetFloatValue(UNIT_FIELD_HOVERHEIGHT, 1.0f);            // default for players in 3.0.3
+
+    SetInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX, uint32(-1));  // -1 is default value
+
+    //SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID, skin);
+    //SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_FACE_ID, face);
+    //SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_STYLE_ID, hairStyle);
+    //SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_COLOR_ID, hairColor);
+    //SetByteValue(PLAYER_BYTES_2, PLAYER_BYTES_2_OFFSET_FACIAL_STYLE, facialHairStyle);
+    for (uint32 i = 0; i < PLAYER_CUSTOM_DISPLAY_SIZE; ++i)
+        SetByteValue(PLAYER_BYTES_2, PLAYER_BYTES_2_OFFSET_CUSTOM_DISPLAY_OPTION + i, 0);
+    SetUInt32Value(PLAYER_FIELD_REST_INFO + REST_STATE_XP, (GetSession()->IsARecruiter() || GetSession()->GetRecruiterId() != 0) ? REST_STATE_RAF_LINKED : REST_STATE_NOT_RAF_LINKED);
+    SetUInt32Value(PLAYER_FIELD_REST_INFO + REST_STATE_HONOR, REST_STATE_NOT_RAF_LINKED);
+    SetByteValue(PLAYER_BYTES_3, PLAYER_BYTES_3_OFFSET_GENDER, gender);
+    SetByteValue(PLAYER_BYTES_4, PLAYER_BYTES_4_OFFSET_ARENA_FACTION, 0);
+    SetInventorySlotCount(INVENTORY_DEFAULT_SIZE);
+
+    SetGuidValue(OBJECT_FIELD_DATA, ObjectGuid::Empty);
+    SetUInt32Value(PLAYER_GUILDRANK, 0);
+    SetGuildLevel(0);
+    SetUInt32Value(PLAYER_GUILD_TIMESTAMP, 0);
+
+    for (int i = 0; i < KNOWN_TITLES_SIZE; ++i)
+        SetUInt64Value(PLAYER__FIELD_KNOWN_TITLES + i, 0);  // 0=disabled
+    SetUInt32Value(PLAYER_CHOSEN_TITLE, 0);
+
+    SetUInt32Value(PLAYER_FIELD_KILLS, 0);
+    SetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS, 0);
+
+    SetUInt32Value(UNIT_FIELD_LEVEL, start_level);
+
+    InitRunes();
+
+    SetXP(xp);
+
+    SetUInt64Value(PLAYER_FIELD_COINAGE, money);
+    SetCurrency(CURRENCY_TYPE_APEXIS_CRYSTALS, 0);
+    SetCurrency(CURRENCY_TYPE_JUSTICE_POINTS, 0);
+    SetCurrency(CURRENCY_TYPE_ARTIFACT_KNOWLEDGE, 0);
+
+    // start with every map explored
+    if (sWorld->getBoolConfig(CONFIG_START_ALL_EXPLORED))
+    {
+        for (uint16 i = 0; i<PLAYER_EXPLORED_ZONES_SIZE; i++)
+            SetFlag(PLAYER_EXPLORED_ZONES_1 + i, 0xFFFFFFFF);
+    }
+
+    GetReputationMgr().Initialize();
+    result = CharacterDatabase.PQuery("SELECT faction, standing FROM tfm_character_reputation WHERE guid = %u", oldGuid);
+    if (result)
+    {
+        std::vector<uint32>testFactions = { 931, 948, 949, 952, 953, 1060, 1127, 1163, 2063, 2180 };
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 faction = fields[0].GetUInt16();
+            // skip test factions if any
+            if (std::find(testFactions.begin(), testFactions.end(), faction) == testFactions.end())
+            {
+                int32 standing = fields[1].GetInt32();
+                FactionEntry const* factionEntry = sFactionStore.LookupEntry(faction);
+                if (factionEntry)
+                {
+                    GetReputationMgr().SetOneFactionReputation(factionEntry, standing, false);
+                }
+                else
+                    TC_LOG_DEBUG("import", "Player::Import: Account %u character named '%s' tryed to add reputation with invalid faction %u - skipped", GetSession()->GetAccountId(), m_name.c_str(), faction);
+            }
+        } while (result->NextRow());
+    }
+
+    result = CharacterDatabase.PQuery("SELECT skill, value, max FROM tfm_character_skills WHERE guid = %u", oldGuid);
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 skill = fields[0].GetUInt16();
+            uint32 value = fields[1].GetUInt16();
+            uint32 max = fields[2].GetUInt16();
+            SetSkill(skill, 0, value, max);
+        } while (result->NextRow());
+    }
+
+    result = CharacterDatabase.PQuery("SELECT currency, total_count FROM tfm_character_currency WHERE guid = %u", oldGuid);
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 currency = fields[0].GetUInt16();
+            if (sCurrencyTypesStore.LookupEntry(currency))
+            {
+                uint32 count = fields[1].GetUInt32();
+                ModifyCurrency(currency, count, false, true);
+            }
+        } while (result->NextRow());
+    }
+
+    result = CharacterDatabase.PQuery("SELECT quest FROM tfm_character_queststatus_rewarded WHERE guid = %u", oldGuid);
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 questId = fields[0].GetUInt32();
+            Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+            if (quest)
+            {
+                // learn rewarded spell if unknown
+                LearnQuestRewardedSpells(quest);
+
+                // set rewarded title if any
+                if (quest->GetRewTitle())
+                    if (CharTitlesEntry const* titleEntry = sCharTitlesStore.LookupEntry(quest->GetRewTitle()))
+                        SetTitle(titleEntry);
+
+                // Skip loading special quests - they are also added to rewarded quests but only once and remain there forever
+                // instead add them separately from load daily/weekly/monthly/seasonal
+                if (!quest->IsDailyOrWeekly() && !quest->IsMonthly() && !quest->IsSeasonal())
+                    if (uint32 questBit = sDB2Manager.GetQuestUniqueBitFlag(questId))
+                        SetQuestCompletedBit(questBit, true);
+
+                for (uint32 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
+                    GetSession()->GetCollectionMgr()->AddItemAppearance(quest->RewardChoiceItemId[i]);
+
+                for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
+                    GetSession()->GetCollectionMgr()->AddItemAppearance(quest->RewardItemId[i]);
+
+                if (std::vector<QuestPackageItemEntry const*> const* questPackageItems = sDB2Manager.GetQuestPackageItems(quest->GetQuestPackageID()))
+                    for (QuestPackageItemEntry const* questPackageItem : *questPackageItems)
+                        if (ItemTemplate const* rewardProto = sObjectMgr->GetItemTemplate(questPackageItem->ItemID))
+                            if (rewardProto->ItemSpecClassMask & getClassMask())
+                                GetSession()->GetCollectionMgr()->AddItemAppearance(questPackageItem->ItemID);
+
+                if (quest->CanIncreaseRewardedQuestCounters())
+                    m_RewardedQuests.insert(questId);
+            }
+        } while (result->NextRow());
+    }
+
+    GetAchievementMgr()->LoadForImport(oldGuid);
+
+    std::vector<uint32>depricatedSpells = {
+        1066,   // Travel Form
+        40120,  // Travel Form
+        26798,  // Mooncloth Tailoring
+        26801,  // Shadoweave Tailoring
+        26797,  // Spellfire Tailoring
+        10658,  // Elemental Leatherworking
+        10656,  // Dragonscale Leatherworking
+        10660,  // Tribal Leatherworking
+        28676,  // Potion Master
+        28677,  // Elixir Master
+        28672,  // Transmutation Master
+        20219,  // Gnomish Engineer
+        20222,  // Goblin Engineer
+        9787,   // Weaponsmith
+        9788    // Armorsmith
+    };
+    result = CharacterDatabase.PQuery("SELECT spell, active, disabled FROM tfm_character_spell WHERE guid = %u", oldGuid);
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 spellId = fields[0].GetUInt32();
+            uint32 active = fields[1].GetUInt8();
+            uint32 disabled = fields[2].GetUInt8();
+
+            if (active && !disabled)
+            {
+                if (SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellId))
+                {
+                    SkillLineAbilityMapBounds bounds = sSpellMgr->GetSkillLineAbilityMapBounds(spellId);
+
+                    bool skip = true;
+                    for (SkillLineAbilityMap::const_iterator _spell_idx = bounds.first; _spell_idx != bounds.second; ++_spell_idx)
+                    {
+                        skip = false;
+                    }
+                    if (std::find(depricatedSpells.begin(), depricatedSpells.end(), spellId) != depricatedSpells.end())
+                        skip = true;
+                    if (!skip)
+                        LearnSpell(spellId, false);
+                    else
+                    {
+                        TC_LOG_DEBUG("import", "skipping spell %u, %s", spellId, spell->SpellName->Str[GetSession()->GetSessionDbcLocale()]);
+                    }
+                }
+            }
+        } while (result->NextRow());
+    }
+
+    // remove depricated spells if it was learned from quests, achievements or other sources
+    for (uint32 spellId : depricatedSpells)
+    {
+        RemoveSpell(spellId, false);
+    }
+
+    SetBankBagSlotCount(7);
+
+    time_t now = time(nullptr);
+    time_t logoutTime = time_t(fields[21].GetUInt32());
+
+    // since last logout (in seconds)
+    uint32 timeDiff = uint32(now - logoutTime);
+
+    // item import
+    //                                        0        1             2               3                   4         5            6           7         8                9                    10             11             12       13   14
+    result = CharacterDatabase.PQuery("SELECT ii.guid, ii.itemEntry, ii.creatorGuid, ii.giftCreatorGuid, ii.count, ii.duration, ii.charges, ii.flags, ii.enchantments, ii.randomPropertyId, ii.durability, ii.playedTime, ii.text, bag, slot FROM tfm_character_inventory ci JOIN tfm_item_instance ii ON ci.item = ii.guid WHERE ci.guid = %u ORDER BY(ii.flags & 0x80000) ASC, bag ASC, slot ASC", oldGuid);
+    //NOTE: ORDER BY ii.flags & 0x80000 makes child items load last - they need their parents to be already loaded
+    //NOTE: the "order by `bag`" is important because it makes sure
+    //the bagMap is filled before items in the bags are loaded
+    //NOTE2: the "order by `slot`" is needed because mainhand weapons are (wrongly?)
+    //expected to be equipped before offhand items (@todo fixme)
+
+    //SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    std::list<Item*> problematicItems;
+
+    if (result)
+    {
+        uint32 zoneId = GetZoneId();
+
+        std::map<ObjectGuid, Bag*> bagMap;                               // fast guid lookup for bags
+        std::map<ObjectGuid, Item*> invalidBagMap;                       // fast guid lookup for bags
+
+        // oldguid - newguid
+        std::map<uint64, ObjectGuid> guids;
+        // Prevent items from being added to the queue while loading
+        //m_itemUpdateQueueBlocked = true;
+        do
+        {
+            Field* fields = result->Fetch();
+
+            uint64 itemGuid = fields[0].GetUInt64();
+            uint32 itemId = fields[1].GetUInt32();
+            uint32 itemCount = fields[4].GetUInt32();
+
+            if (!sObjectMgr->GetItemTemplate(itemId))
+                continue;
+
+            if (Item* item = Item::CreateItem(itemId, itemCount, this))
+            {
+                guids[itemGuid] = item->GetGUID();
+
+                uint64 oldBagGuid = fields[13].GetUInt64();
+                uint8 slot = fields[14].GetUInt8();
+
+                GetSession()->GetCollectionMgr()->CheckHeirloomUpgrades(item);
+                GetSession()->GetCollectionMgr()->AddItemAppearance(item);
+
+                InventoryResult err = EQUIP_ERR_OK;
+                /*if (item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FIELD_FLAG_CHILD))
+                {
+                    if (Item* parent = GetItemByGuid(item->GetGuidValue(ITEM_FIELD_CREATOR)))
+                    {
+                        parent->SetChildItem(item->GetGUID());
+                        item->CopyArtifactDataFromParent(parent);
+                    }
+                    else
+                    {
+                        item->DeleteFromDB(trans);
+                        item->DeleteFromInventoryDB(trans);
+                        delete item;
+                        continue;
+                    }
+                }*/
+
+                // OLD BANK_SLOT_ITEM_START        = 39
+                // NEW BANK_SLOT_ITEM_START        = 47
+                // Item is not in bag
+                if (!oldBagGuid)
+                {
+                    if (slot >= 39)
+                        slot += 8;
+
+                    item->SetContainer(nullptr);
+                    item->SetSlot(slot);
+
+                    if (IsInventoryPos(INVENTORY_SLOT_BAG_0, slot))
+                    {
+                        ItemPosCountVec dest;
+                        err = CanStoreItem(INVENTORY_SLOT_BAG_0, slot, dest, item, false);
+                        if (err == EQUIP_ERR_OK)
+                            item = StoreItem(dest, item, true);
+                    }
+                    else if (IsEquipmentPos(INVENTORY_SLOT_BAG_0, slot))
+                    {
+                        uint16 dest;
+                        err = CanEquipItem(slot, dest, item, false, false);
+                        if (err == EQUIP_ERR_OK)
+                            QuickEquipItem(dest, item);
+                    }
+                    else if (IsBankPos(INVENTORY_SLOT_BAG_0, slot))
+                    {
+                        ItemPosCountVec dest;
+                        err = CanBankItem(INVENTORY_SLOT_BAG_0, slot, dest, item, false, false);
+                        if (err == EQUIP_ERR_OK)
+                            item = BankItem(dest, item, true);
+                    }
+
+                    // Remember bags that may contain items in them
+                    if (err == EQUIP_ERR_OK)
+                    {
+                        if (IsBagPos(item->GetPos()))
+                            if (Bag* pBag = item->ToBag())
+                                bagMap[item->GetGUID()] = pBag;
+                    }
+                    else
+                        if (IsBagPos(item->GetPos()))
+                            if (item->IsBag())
+                                invalidBagMap[item->GetGUID()] = item;
+                }
+                else
+                {
+                    // find old guid from new
+                    ObjectGuid bagGuid = ObjectGuid::Empty;
+                    auto bitr = guids.find(oldBagGuid);
+                    if (bitr != guids.end())
+                    {
+                        bagGuid = bitr->second;
+                    }
+                    else
+                    {
+                        TC_LOG_ERROR("import", "Player::Import: Account %u character named '%s' has item (%s, entry: %u) which can't be loaded into inventory, guid pair not found.", GetSession()->GetAccountId(), m_name.c_str(), item->GetGUID().ToString().c_str(), item->GetEntry());
+                        continue;
+                    }
+                    item->SetSlot(NULL_SLOT);
+                    // Item is in the bag, find the bag
+                    std::map<ObjectGuid, Bag*>::iterator itr = bagMap.find(bagGuid);
+                    if (itr != bagMap.end())
+                    {
+                        ItemPosCountVec dest;
+                        err = CanStoreItem(itr->second->GetSlot(), slot, dest, item);
+                        if (err == EQUIP_ERR_OK)
+                            item = StoreItem(dest, item, true);
+                    }
+                    else if (invalidBagMap.find(bagGuid) != invalidBagMap.end())
+                    {
+                        std::map<ObjectGuid, Item*>::iterator invalidBagItr = invalidBagMap.find(bagGuid);
+                        if (std::find(problematicItems.begin(), problematicItems.end(), invalidBagItr->second) != problematicItems.end())
+                            err = EQUIP_ERR_INTERNAL_BAG_ERROR;
+                    }
+                    else
+                    {
+                        TC_LOG_ERROR("entities.player", "Player::_LoadInventory: Player '%s' (%s) has item (%s, entry: %u) which doesnt have a valid bag (Bag %s, slot: %u). Possible cheat?",
+                            GetName().c_str(), GetGUID().ToString().c_str(), item->GetGUID().ToString().c_str(), item->GetEntry(), bagGuid.ToString().c_str(), slot);
+                        //item->DeleteFromInventoryDB(trans);
+                        delete item;
+                        continue;
+                    }
+                }
+                item->SetState(ITEM_NEW, this);
+                if (err != EQUIP_ERR_OK)
+                {
+                    TC_LOG_ERROR("import", "Player::Import: Account %u character named '%s' has item (%s, entry: %u) which can't be loaded into inventory (Bag %u, slot: %u) by reason %u. Item will be sent by mail.", GetSession()->GetAccountId(), m_name.c_str(), item->GetGUID().ToString().c_str(), item->GetEntry(), oldBagGuid, slot, uint32(err));
+                    //item->DeleteFromInventoryDB(trans);
+                    problematicItems.push_back(item);
+                }
+            }
+        } while (result->NextRow());
+
+        //m_itemUpdateQueueBlocked = false;
+
+        
+    }
+    //if (IsAlive())
+    _ApplyAllItemMods();
+    
+    
+    m_taxi.LoadTaxiMask(taxiMask);
+
+    if (!exploredZones.empty())
+    {
+        Tokenizer tokens(exploredZones, ' ');
+        uint32 index = 0;
+        auto iter = tokens.begin();
+        for (; iter != tokens.end(); ++iter)
+        {
+            uint32 node = atoul(*iter);
+            SetUInt32Value(PLAYER_EXPLORED_ZONES_1 + index, node);
+            ++index;
+            if (index >= PLAYER_EXPLORED_ZONES_SIZE)
+                break; // fail safe
+        }
+    }
+    // Played time
+    m_Last_tick = time(nullptr);
+    m_Played_time[PLAYED_TIME_TOTAL] = totalTime;
+    m_Played_time[PLAYED_TIME_LEVEL] = levelTime;
+
+    // base stats and related field values
+    InitStatsForLevel();
+    InitTaxiNodesForLevel();
+    InitTalentForLevel();
+    InitPrimaryProfessions();                               // to max set before any spell added
+
+                                                            // apply original stats mods before spell loading or item equipment that call before equip _RemoveStatsMods()
+    UpdateMaxHealth();                                      // Update max Health (for add bonus from stamina)
+    SetFullHealth();
+    SetFullPower(POWER_MANA);
+
+    // original spells
+    LearnDefaultSkills();
+    LearnCustomSpells();
+
+    Relocate(info->positionX, info->positionY, info->positionZ, info->orientation);
+
+
+    if (ChrSpecializationEntry const* defaultSpec = sDB2Manager.GetDefaultChrSpecializationForClass(getClass()))
+    {
+        SetActiveTalentGroup(defaultSpec->OrderIndex);
+        SetPrimarySpecialization(defaultSpec->ID);
+    }
+
+    SetAtLoginFlag(AT_LOGIN_FIRST); // First login
+
+    // Send problematic items by mail 
+    /*while (!problematicItems.empty())
+    {
+        std::string subject = GetSession()->GetTrinityString(LANG_NOT_EQUIPPED_ITEM);
+
+        MailDraft draft(subject, "There were problems with equipping item(s).");
+        for (uint8 i = 0; !problematicItems.empty() && i < MAX_MAIL_ITEMS; ++i)
+        {
+            draft.AddItem(problematicItems.front());
+            problematicItems.pop_front();
+        }
+        draft.SendMailTo(trans, this, MailSender(this, MAIL_STATIONERY_GM), MAIL_CHECK_MASK_COPIED);
+    }*/
+
+    //CharacterDatabase.CommitTransaction(trans);
+
+    SaveToDB(true); // Player created, save it now. ASYNC QUERY!!!
+
+    return true;
+}

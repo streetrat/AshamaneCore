@@ -1099,6 +1099,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SummonIfPossible(bool agree);
 
         bool Create(ObjectGuid::LowType guidlow, WorldPackets::Character::CharacterCreateInfo const* createInfo);
+        bool Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid);
 
         void Update(uint32 time) override;
 

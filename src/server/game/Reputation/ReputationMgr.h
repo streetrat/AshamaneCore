@@ -142,8 +142,10 @@ class TC_GAME_API ReputationMgr
         void SendState(FactionState const* faction);
         void SendStates();
 
-    private:                                                // internal helper functions
+        // need to be public for importer
         void Initialize();
+
+    private:                                                // internal helper functions
         uint32 GetDefaultStateFlags(FactionEntry const* factionEntry) const;
         bool SetReputation(FactionEntry const* factionEntry, int32 standing, bool incremental, bool noSpillover);
         void SetVisible(FactionState* faction);

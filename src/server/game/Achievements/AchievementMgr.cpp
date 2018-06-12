@@ -1287,3 +1287,64 @@ void AchievementGlobalMgr::LoadRewardLocales()
 
     TC_LOG_INFO("server.loading", ">> Loaded %u achievement reward locale strings in %u ms.", uint32(_achievementRewardLocales.size()), GetMSTimeDiffToNow(oldMSTime));
 }
+
+void PlayerAchievementMgr::LoadForImport(ObjectGuid::LowType oldGuid)
+{
+    QueryResult achievementResult = CharacterDatabase.PQuery("SELECT achievement, date FROM tfm_character_achievement WHERE guid = %u", oldGuid);
+    if (achievementResult)
+    {
+        do
+        {
+            Field* fields = achievementResult->Fetch();
+            uint32 achievementid = fields[0].GetUInt32();
+
+            // must not happen: cleanup at server startup in sAchievementMgr->LoadCompletedAchievements()
+            AchievementEntry const* achievement = sAchievementStore.LookupEntry(achievementid);
+            if (!achievement)
+            {
+                TC_LOG_DEBUG("import", "Player::Import: Non-existing achievement %u has been skipped", achievementid);
+                continue;
+            }
+            CompletedAchievementData& ca = _completedAchievements[achievementid];
+            ca.Date = time_t(fields[1].GetUInt32());
+            ca.Changed = true;
+
+            _achievementPoints += achievement->Points;
+
+            // title achievement rewards are retroactive
+            if (AchievementReward const* reward = sAchievementMgr->GetAchievementReward(achievement))
+                if (uint32 titleId = reward->TitleId[Player::TeamForRace(_owner->getRace()) == ALLIANCE ? 0 : 1])
+                    if (CharTitlesEntry const* titleEntry = sCharTitlesStore.LookupEntry(titleId))
+                        _owner->SetTitle(titleEntry);
+
+        } while (achievementResult->NextRow());
+    }
+
+    QueryResult criteriaResult = CharacterDatabase.PQuery("SELECT criteria, counter, date FROM tfm_character_achievement_progress WHERE guid = %u", oldGuid);
+    if (criteriaResult)
+    {
+        time_t now = time(NULL);
+        do
+        {
+            Field* fields = criteriaResult->Fetch();
+            uint32 id = fields[0].GetUInt32();
+            uint64 counter = fields[1].GetUInt64();
+            time_t date = time_t(fields[2].GetUInt32());
+
+            Criteria const* criteria = sCriteriaMgr->GetCriteria(id);
+            if (!criteria)
+            {
+                TC_LOG_DEBUG("import", "Player::Import: Non-existing achievement criteria %u has been skipped", id);
+                continue;
+            }
+
+            //if (criteria->Entry->StartTimer && time_t(date + criteria->Entry->StartTimer) < now)
+            //    continue;
+
+            CriteriaProgress& progress = _criteriaProgress[id];
+            progress.Counter = counter;
+            progress.Date = date;
+            progress.Changed = true;
+        } while (criteriaResult->NextRow());
+    }
+}

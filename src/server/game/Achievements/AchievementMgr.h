@@ -82,6 +82,7 @@ public:
 
     static void DeleteFromDB(ObjectGuid const& guid);
     void LoadFromDB(PreparedQueryResult achievementResult, PreparedQueryResult criteriaResult);
+    void LoadForImport(ObjectGuid::LowType oldGuid);
     void SaveToDB(SQLTransaction& trans);
 
     void ResetCriteria(CriteriaTypes type, uint64 miscValue1 = 0, uint64 miscValue2 = 0, bool evenIfCriteriaComplete = false);

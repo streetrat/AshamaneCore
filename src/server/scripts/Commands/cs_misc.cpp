@@ -118,6 +118,7 @@ public:
             { "mailbox",          rbac::RBAC_PERM_COMMAND_MAILBOX,          false, &HandleMailBoxCommand,          "" },
             { "auras  ",          rbac::RBAC_PERM_COMMAND_LIST_AURAS,       false, &HandleAurasCommand,            "" },
             { "light  ",          rbac::RBAC_PERM_COMMAND_LIST_AURAS,       false, &HandleLightCommand,            "" },
+            { "importcharacter  ",rbac::RBAC_PERM_COMMAND_LIST_AURAS,       false, &HandleImportCharacterCommand,  "" },
         };
         return commandTable;
     }
@@ -2808,6 +2809,55 @@ public:
         Player* player = handler->GetSession()->GetPlayer();
         player->GetMap()->SetZoneOverrideLight(player->GetAreaId(), lightId, 5000);
 
+        return true;
+    }
+
+    static bool HandleImportCharacterCommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+            return false;
+
+        uint32 guid = atoul(args);
+        if (!guid)
+        {
+            handler->PSendSysMessage("Please provide a guid to import");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        QueryResult result = LoginDatabase.PQuery("SELECT SUM(numchars) FROM realmcharacters WHERE acctid = %u", handler->GetSession()->GetAccountId());
+        if (!result)
+        {
+            handler->PSendSysMessage("Database error");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+        Field* fields = result->Fetch();
+        uint32 acctCharCount = fields[0].GetDouble();
+
+        if (acctCharCount >= sWorld->getIntConfig(CONFIG_CHARACTERS_PER_ACCOUNT))
+        {
+            handler->PSendSysMessage("You have the maximum number of characters (%u)", acctCharCount);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        // create base player
+        Player newChar(handler->GetSession());
+        newChar.GetMotionMaster()->Initialize();
+        if (!newChar.Import(sObjectMgr->GetGenerator<HighGuid::Player>().Generate(), guid))
+        {
+            handler->PSendSysMessage("Could not import character with guid %u)", guid);
+            newChar.CleanupsBeforeDelete();
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        sWorld->AddCharacterInfo(newChar.GetGUID(), handler->GetSession()->GetAccountId(), newChar.GetName(), newChar.GetByteValue(PLAYER_BYTES_3, PLAYER_BYTES_3_OFFSET_GENDER), newChar.getRace(), newChar.getClass(), newChar.getLevel(), false);
+
+        newChar.CleanupsBeforeDelete();
+
+        handler->PSendSysMessage("Sucessfully imported character %s with guid %u)", newChar.GetName(), guid);
         return true;
     }
 };
