@@ -29579,6 +29579,13 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     uint32 totalTime = fields[17].GetUInt32();
     uint32 levelTime = fields[18].GetUInt32();
 
+
+    time_t now = time(nullptr);
+    time_t logoutTime = time_t(fields[21].GetUInt32());
+
+    // since last logout (in seconds)
+    uint32 timeDiff = uint32(now - logoutTime);
+
     uint8 skin = 0;
     uint8 face = 0;
     uint8 hairStyle = 0;
@@ -29769,8 +29776,7 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
                             if (rewardProto->ItemSpecClassMask & getClassMask())
                                 GetSession()->GetCollectionMgr()->AddItemAppearance(questPackageItem->ItemID);
 
-                if (quest->CanIncreaseRewardedQuestCounters())
-                    m_RewardedQuests.insert(questId);
+                SetRewardedQuest(questId);
             }
         } while (result->NextRow());
     }
@@ -29835,12 +29841,6 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     }
 
     SetBankBagSlotCount(7);
-
-    time_t now = time(nullptr);
-    time_t logoutTime = time_t(fields[21].GetUInt32());
-
-    // since last logout (in seconds)
-    uint32 timeDiff = uint32(now - logoutTime);
 
     // item import
     //                                        0        1             2               3                   4         5            6           7         8                9                    10             11             12       13   14
