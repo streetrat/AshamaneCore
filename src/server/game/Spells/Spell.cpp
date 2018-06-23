@@ -2974,9 +2974,16 @@ bool Spell::UpdateChanneledTargetList()
 
     uint32 channelTargetEffectMask = m_channelTargetEffectMask;
     uint32 channelAuraMask = 0;
+    float maxRadius = 0;
+
     for (SpellEffectInfo const* effect : GetEffects())
+    {
         if (effect && effect->Effect == SPELL_EFFECT_APPLY_AURA)
+        {
             channelAuraMask |= 1 << effect->EffectIndex;
+            maxRadius = std::max(effect->CalcRadius(m_caster, this), maxRadius);
+        }
+    }
 
     channelAuraMask &= channelTargetEffectMask;
 
@@ -2986,6 +2993,9 @@ bool Spell::UpdateChanneledTargetList()
         range = m_spellInfo->GetMaxRange(m_spellInfo->IsPositive());
         if (Player* modOwner = m_caster->GetSpellModOwner())
             modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, range, this);
+
+        if (!range)
+            range = maxRadius;
     }
 
     for (std::vector<TargetInfo>::iterator ihit = m_UniqueTargetInfo.begin(); ihit != m_UniqueTargetInfo.end(); ++ihit)
@@ -3470,6 +3480,9 @@ void Spell::cast(bool skipCheck)
 
     if (m_caster->IsCreature() && m_caster->IsAIEnabled)
         m_caster->ToCreature()->AI()->OnSpellCasted(m_spellInfo);
+
+    if (m_caster->IsPlayer())
+        sScriptMgr->OnPlayerSuccessfulSpellCast(m_caster->ToPlayer(), this);
 
     if (const std::vector<int32> *spell_triggered = sSpellMgr->GetSpellLinked(m_spellInfo->Id))
     {

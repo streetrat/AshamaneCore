@@ -41,7 +41,7 @@ DoorData const doorData[] =
 
 struct instance_black_rook_hold : public InstanceScript
 {
-    instance_black_rook_hold(Map* map) : InstanceScript(map) { }
+    instance_black_rook_hold(InstanceMap* map) : InstanceScript(map) { }
 
     void Initialize() override
     {
@@ -130,16 +130,12 @@ struct instance_black_rook_hold : public InstanceScript
                 }
             }
         }
-        else if (GetData(DATA_ILLYSANNA_PREEVENT_UPPER) == NOT_STARTED)
-        {
-            m_illysannaPreEventUpperMobs.remove(unit->GetGUID());
 
-            if (m_illysannaPreEventUpperMobs.size() == 0)
-            {
-                HandleGameObject(GetObjectGuid(GOB_DOOR_ILLYSANNA_PORTCULLIS_1), true);
-                HandleGameObject(GetObjectGuid(GOB_DOOR_ILLYSANNA_PORTCULLIS_2), true);
-                SetData(DATA_ILLYSANNA_PREEVENT_UPPER, DONE);
-            }
+        if (unit->GetEntry() == NPC_COMMANDER_SHEMDAHSOHN)
+        {
+            HandleGameObject(GetObjectGuid(GOB_DOOR_ILLYSANNA_PORTCULLIS_1), true);
+            HandleGameObject(GetObjectGuid(GOB_DOOR_ILLYSANNA_PORTCULLIS_2), true);
+            SetData(DATA_ILLYSANNA_PREEVENT_UPPER, DONE);
         }
     }
 

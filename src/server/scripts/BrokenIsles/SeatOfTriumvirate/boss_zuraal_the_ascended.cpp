@@ -15,26 +15,34 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "AreaTrigger.h"
+#include "AreaTriggerAI.h"
 #include "ScriptMgr.h"
 #include "seat_of_triumvirate.h"
 
 enum Spells
 {
-    SPELL_NULL_PALM             = 246134,
-    SPELL_VOID_SLUDGE           = 244588,
-    SPELL_VOID_INFUSION         = 244300,
-    SPELL_DECIMATE              = 344579,
+    SPELL_VOID_CONTAINMENT      = 246922,
+    SPELL_VOID_PHASED           = 246913,
 
+    SPELL_NULL_PALM             = 246134,
+    SPELL_NULL_PALM_MISSILE     = 246135,
+    SPELL_NULL_PALM_DAMAGE      = 246136,
+
+    SPELL_DECIMATE              = 244579,
+
+    SPELL_COALESCED_VOID        = 244602,
     SPELL_DARK_EXPULSION        = 244599,
     SPELL_UMBRAL_EJECTION       = 244731,
+    SPELL_VOID_SLUDGE           = 244588,
+    SPELL_VOID_INFUSION         = 244300,
+
     SPELL_UMBRA_SHIFT           = 244433,
     SPELL_FIXATE                = 244657,
     SPELL_MADDENED_FRENZY       = 247038,
 
     SPELL_RELEASE_VOID_ENERGY   = 244618,
     SPELL_VOID_TEAR             = 244621,
-
-    SPELL_PHYSICAL_REALM        = 244074,
 };
 
 enum Npcs
@@ -50,14 +58,171 @@ struct boss_zuraal_the_ascended : public BossAI
 
     void ScheduleTasks() override
     {
+        events.ScheduleEvent(SPELL_NULL_PALM,   10s);
+        events.ScheduleEvent(SPELL_DECIMATE,    10s);
+        events.ScheduleEvent(SPELL_UMBRA_SHIFT, 10s);
     }
 
-    void ExecuteEvent(uint32 /*eventId*/) override
+    void ExecuteEvent(uint32 eventId) override
     {
+        switch (eventId)
+        {
+            case SPELL_NULL_PALM:
+            {
+                me->CastSpell(nullptr, SPELL_NULL_PALM, false);
+                events.Repeat(10s);
+                break;
+            }
+            case SPELL_DECIMATE:
+            {
+                if (Unit* target = SelectTarget(SELECT_TARGET_TOPAGGRO))
+                    me->CastSpell(target, SPELL_DECIMATE, false);
+
+                events.Repeat(10s);
+                break;
+            }
+            case SPELL_UMBRA_SHIFT:
+            {
+                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 1))
+                    me->CastSpell(target, SPELL_UMBRA_SHIFT, false);
+
+                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 1, 0.f, true, -SPELL_UMBRA_SHIFT))
+                    me->CastSpell(target, SPELL_FIXATE, false);
+
+                break;
+            }
+        }
+    }
+};
+
+// 124171
+class npc_shadowguard_subjugator : public ScriptedAI
+{
+public:
+    npc_shadowguard_subjugator(Creature* creature) : ScriptedAI(creature) {}
+
+    void Reset() override
+    {
+        me->CastSpell(me, SPELL_VOID_CONTAINMENT, false);
+    }
+};
+
+// 122716
+class npc_coalesced_void : public ScriptedAI
+{
+public:
+    npc_coalesced_void(Creature* creature) : ScriptedAI(creature) {}
+
+    void Reset() override
+    {
+        if (IsMythic())
+            me->CastSpell(me, SPELL_UMBRAL_EJECTION, false);
+
+        me->GetScheduler().Schedule(1s, [](TaskContext context)
+        {
+            if (TempSummon* tempSummon = GetContextCreature()->ToTempSummon())
+            {
+                if (tempSummon->IsWithinDist(tempSummon->GetSummoner(), 3.f))
+                {
+                    tempSummon->CastSpell(nullptr, SPELL_DARK_EXPULSION, false);
+                    tempSummon->DespawnOrUnsummon();
+                }
+                else
+                    context.Repeat(1s);
+            }
+        });
+    }
+};
+
+// 246134
+class spell_null_palm : public SpellScript
+{
+    PrepareSpellScript(spell_null_palm);
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        if (Unit* target = GetHitUnit())
+            GetCaster()->CastSpell(target->GetPosition(), SPELL_NULL_PALM_MISSILE, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_null_palm::HandleDummy, EFFECT_1, SPELL_EFFECT_DUMMY);
+    }
+};
+
+// 246913
+class aura_void_phased : public AuraScript
+{
+    PrepareAuraScript(aura_void_phased);
+
+    void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        GetTarget()->SetHover(true);
+    }
+
+    void OnPeriodic(AuraEffect const* /*aurEff*/)
+    {
+        if (!GetTarget()->HasAura(SPELL_VOID_CONTAINMENT))
+            Remove();
+    }
+
+    void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        Unit* target = GetTarget();
+        target->SetHover(false);
+        target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+    }
+
+    void Register() override
+    {
+        OnEffectApply += AuraEffectApplyFn(aura_void_phased::OnApply, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        OnEffectPeriodic += AuraEffectPeriodicFn(aura_void_phased::OnPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
+        OnEffectRemove += AuraEffectRemoveFn(aura_void_phased::OnRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
+// Spell 244732
+// at : 15477
+struct at_umbral_ejection : AreaTriggerAI
+{
+    at_umbral_ejection(AreaTrigger* areatrigger) : AreaTriggerAI(areatrigger) { }
+
+    void OnInitialize() override
+    {
+        at->SetPeriodicProcTimer(2000);
+    }
+
+    void OnPeriodicProc() override
+    {
+        if (Unit* caster = at->GetCaster())
+        {
+            for (ObjectGuid guid : at->GetInsideUnits())
+            {
+                if (Unit* unit = ObjectAccessor::GetUnit(*caster, guid))
+                {
+                    if (caster->IsValidAttackTarget(unit))
+                    {
+                        unit->CastSpell(unit, SPELL_VOID_SLUDGE, true);
+                    }
+                    else if (unit == caster)
+                    {
+                        unit->CastSpell(unit, SPELL_VOID_INFUSION, true);
+                    }
+                }
+            }
+        }
     }
 };
 
 void AddSC_boss_zuraal_the_ascended()
 {
     RegisterCreatureAI(boss_zuraal_the_ascended);
+    RegisterCreatureAI(npc_shadowguard_subjugator);
+    RegisterCreatureAI(npc_coalesced_void);
+
+    RegisterSpellScript(spell_null_palm);
+    RegisterAuraScript(aura_void_phased);
+
+    RegisterAreaTriggerAI(at_umbral_ejection);
 }

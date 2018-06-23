@@ -42,8 +42,9 @@
 #include <G3D/AABox.h>
 
 AreaTrigger::AreaTrigger() : WorldObject(false), MapObject(), _aurEff(nullptr),
-    _duration(0), _totalDuration(0), _timeSinceCreated(0), _previousCheckOrientation(std::numeric_limits<float>::infinity()),
-    _isRemoved(false), _reachedDestination(true), _lastSplineIndex(0), _movementTime(0),
+    _duration(0), _totalDuration(0), _timeSinceCreated(0), _periodicProcTimer(0), _basePeriodicProcTimer(0),
+    _previousCheckOrientation(std::numeric_limits<float>::infinity()),
+    _isRemoved(false), _reachedDestination(false), _lastSplineIndex(0), _movementTime(0),
     _areaTriggerTemplate(nullptr), _areaTriggerMiscTemplate(nullptr), _spawnId(0), _guidScriptId(0), _ai()
 {
     m_objectType |= TYPEMASK_AREATRIGGER;
@@ -288,6 +289,17 @@ void AreaTrigger::Update(uint32 diff)
     }
 
     _ai->OnUpdate(diff);
+
+    if (_basePeriodicProcTimer)
+    {
+        if (_periodicProcTimer <= diff)
+        {
+            _ai->OnPeriodicProc();
+            _periodicProcTimer = _basePeriodicProcTimer;
+        }
+        else
+            _periodicProcTimer -= diff;
+    }
 
     UpdateTargetList();
 }
@@ -731,8 +743,8 @@ void AreaTrigger::InitSplines(std::vector<G3D::Vector3> splinePoints, uint32 tim
         reshape.AreaTriggerSpline = boost::in_place();
         reshape.AreaTriggerSpline->ElapsedTimeForMovement = GetElapsedTimeForMovement();
         reshape.AreaTriggerSpline->TimeToTarget = timeToTarget;
-        for (G3D::Vector3 const& vec : splinePoints)
-            reshape.AreaTriggerSpline->Points.emplace_back(vec.x, vec.y, vec.z);
+        for (auto point : _spline->getPoints())
+            reshape.AreaTriggerSpline->Points.emplace_back(point.x, point.y, point.z);
 
         SendMessageToSet(reshape.Write(), true);
     }
