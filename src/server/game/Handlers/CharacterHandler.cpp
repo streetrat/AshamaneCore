@@ -2564,7 +2564,7 @@ void WorldSession::CheckImport()
                     {
                         TC_LOG_ERROR("import", "WorldSession::CheckImport: Account %u has max number of characters (%u) on realm", accountId, acctCharCount);
                         LoginDatabase.DirectPExecute("UPDATE import SET state = 4 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
-                        continue;
+                        break;
                     }
                     // import new character to account
                     Player newChar(this);
@@ -2574,7 +2574,7 @@ void WorldSession::CheckImport()
                         TC_LOG_ERROR("import", "WorldSession::CheckImport: Could not import character %u for account %u", guid, accountId);
                         LoginDatabase.DirectPExecute("UPDATE import SET state = 3 WHERE AccountId = %u AND CharGuid = %u", accountId, guid);
                         newChar.CleanupsBeforeDelete();
-                        continue;
+                        break;
                     }
 
                     sWorld->AddCharacterInfo(newChar.GetGUID(), accountId, newChar.GetName(), newChar.GetByteValue(PLAYER_BYTES_3, PLAYER_BYTES_3_OFFSET_GENDER), newChar.getRace(), newChar.getClass(), newChar.getLevel(), false);
@@ -2586,7 +2586,7 @@ void WorldSession::CheckImport()
                 }
                 case 1: // started
                 {
-                    // import in progress, ignore, log error, probably failed to import
+                    // import in progress, ignore, log error, probably failed to import, can only happen if crashed while importing
                     TC_LOG_ERROR("import", "WorldSession::CheckImport: Found unfinished import for account id %u guid %u", accountId, guid);
                     break;
                 }
@@ -2601,6 +2601,11 @@ void WorldSession::CheckImport()
                     break;
                 }
                 case 4: // import failed, too many character
+                {
+                    // nothing to do
+                    break;
+                }
+                case 5: // import disabled for character
                 {
                     // nothing to do
                     break;

@@ -29650,8 +29650,6 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
         return false;
     }
 
-    SetMap(sMapMgr->CreateMap(info->mapId, this));
-
     SetInt32Value(PLAYER_BYTES, playerBytes);
     SetInt32Value(PLAYER_BYTES_2, playerBytes2);
 
@@ -29667,6 +29665,7 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
             GetSession()->GetAccountId(), m_name.c_str(), gender);
         return false;
     }
+    GetSession()->SetPlayer(this);
 
     SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_RACE, race);
     SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, _class);
@@ -29678,6 +29677,18 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
         SetByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_PVP);
         SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
     }
+
+    if (IsInHorde())
+    {
+        SetMap(sMapMgr->CreateMap(1, this)); // Kalimdor
+        Relocate(1569.969971f, -4397.410156f, 16.047199f, 0.543025f);
+    }
+    else
+    {
+        SetMap(sMapMgr->CreateMap(0, this)); // Eastern Kingdoms
+        Relocate(-8833.070313f, 622.778015f, 93.931702f, 0.571071f);
+    }
+    //SetMap(sMapMgr->CreateMap(info->mapId, this));
 
     SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
     SetFloatValue(UNIT_FIELD_HOVERHEIGHT, 1.0f);            // default for players in 3.0.3
@@ -30119,7 +30130,7 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     }
 
     RemoveAllAuras();
-    if (IsInHorde())
+    /*if (IsInHorde())
     {
         SetMap(sMapMgr->CreateMap(1, this)); // Kalimdor
         Relocate(1569.969971f, -4397.410156f, 16.047199f, 0.543025f);
@@ -30128,7 +30139,7 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     {
         SetMap(sMapMgr->CreateMap(0, this)); // Eastern Kingdoms
         Relocate(-8833.070313f, 622.778015f, 93.931702f, 0.571071f);
-    }
+    }*/
 
     setCinematic(1); // do not show character intro, will be broken if not spawned at original starting place
 
@@ -30157,6 +30168,6 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     //CharacterDatabase.CommitTransaction(trans);
 
     SaveToDB(true); // Player created, save it now. ASYNC QUERY!!!
-
+    GetSession()->SetPlayer(nullptr);
     return true;
 }
