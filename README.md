@@ -1,5 +1,20 @@
 # AshamaneCore
 
+--------------
+
+
+* [Build Status](#build-status)
+* [Introduction](#introduction)
+* [Requirements](#requirements)
+* [Install](#install)
+* [Reporting issues](#reporting-issues)
+* [Submitting fixes](#submitting-fixes)
+* [Copyright](#copyright)
+* [Authors &amp; Contributors](#authors--contributors)
+* [Links](#links)
+
+
+
 ## Build Status
 
 [![master Build Status](https://travis-ci.org/AshamaneProject/AshamaneCore.svg?branch=master)](https://travis-ci.org/AshamaneProject/AshamaneCore) 
@@ -17,6 +32,7 @@ It is fully based on *TrinityCore*, with upgrades like :
 - Legion scripts (WIP)
     - BlackRookHold
     - Darkheart Thicket
+    - Eye Of Azshara
     - Mardum (DH start zone)
     - Emerald Nightmare (1/7)
     - Tomb of Sargeras (1/9)

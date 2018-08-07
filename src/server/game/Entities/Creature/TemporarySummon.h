@@ -69,6 +69,7 @@ enum PetEntries
     ENTRY_GHOUL                   = 26125,
     ENTRY_BLOODWORM               = 99773,
     ENTRY_RISEN_SKULKER           = 99541,
+    ENTRY_ABOMINATION             = 106848,
     // Monk Pet/Minion
     ENTRY_XUEN                    = 63508,
     ENTRY_NIUZAO                  = 73967,
@@ -135,6 +136,7 @@ class TC_GAME_API Minion : public TempSummon
 
         bool IsGuardianPet() const;
         bool IsWarlockMinion() const;
+        bool HasSameSpellPowerAsOwner() const;
     protected:
         Unit* const m_owner;
         float m_followAngle;

@@ -406,12 +406,12 @@ struct ArtifactUnlockLoadInfo
     {
         static DB2FieldMeta const fields[] =
         {
-            { false, FT_INT,   "ID" },
+            { false, FT_INT, "ID" },
             { false, FT_SHORT, "ItemBonusListID" },
-            { false, FT_BYTE,  "PowerRank" },
-            { false, FT_INT,   "PowerID" },
-            { false, FT_INT,   "PlayerConditionID" },
-            { false, FT_BYTE,  "ArtifactID" },
+            { false, FT_BYTE, "PowerRank" },
+            { false, FT_INT, "PowerID" },
+            { false, FT_INT, "PlayerConditionID" },
+            { false, FT_BYTE, "ArtifactID" },
         };
         static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, ArtifactUnlockMeta::Instance(), HOTFIX_SEL_ARTIFACT_UNLOCK);
         return &loadInfo;
@@ -1774,6 +1774,63 @@ struct GarrFollowerLoadInfo
             { false, FT_INT, "ID" },
         };
         static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER);
+        return &loadInfo;
+    }
+};
+
+struct GarrFollowerLevelXPLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_SHORT, "XpToNextLevel" },
+            { false, FT_SHORT, "ShipmentXP" },
+            { false, FT_BYTE, "FollowerLevel" },
+            { false, FT_BYTE, "GarrFollowerTypeId" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerLevelXPMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_LEVEL_XP);
+        return &loadInfo;
+    }
+};
+
+struct GarrFollowerQualityLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_INT, "XpToNextQuality" },
+            { false, FT_SHORT, "ShipmentXP" },
+            { false, FT_BYTE, "Quality" },
+            { false, FT_BYTE, "AbilityCount" },
+            { false, FT_BYTE, "TraitCount" },
+            { false, FT_BYTE, "GarrFollowerTypeId" },
+            { false, FT_INT, "ClassSpecId" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerQualityMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_QUALITY);
+        return &loadInfo;
+    }
+};
+
+struct GarrFollowerTypeLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_SHORT, "MaxItemLevel" },
+            { false, FT_BYTE, "MaxFollowers" },
+            { false, FT_BYTE, "MaxFollowerBuildingType" },
+            { false, FT_BYTE, "GarrTypeId" },
+            { false, FT_BYTE, "LevelRangeBias" },
+            { false, FT_BYTE, "ItemLevelRangeBias" },
+            { false, FT_BYTE, "Flags" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerTypeMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_TYPE);
         return &loadInfo;
     }
 };

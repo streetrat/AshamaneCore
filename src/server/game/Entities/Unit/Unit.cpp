@@ -4708,7 +4708,7 @@ float Unit::GetTotalAuraMultiplier(AuraType auratype, std::function<bool(AuraEff
             // If the Aura Effect does not have this Stack Rule, it returns false so we can add to the multiplier as usual
             if (!sSpellMgr->AddSameEffectStackRuleSpellGroups(aurEff->GetSpellInfo(), aurEff->GetAmount(), sameEffectSpellGroup))
                 if (int32 amount = aurEff->GetAmount())
-                    AddPct(multiplier, aurEff->GetAmount());
+                    AddPct(multiplier, amount);
         }
     }
 
@@ -5145,15 +5145,15 @@ void Unit::RemoveAllGameObjects()
 
 void Unit::_RegisterAreaTrigger(AreaTrigger* areaTrigger)
 {
-    m_areaTrigger.push_back(areaTrigger);
-    if (GetTypeId() == TYPEID_UNIT && IsAIEnabled)
+    m_areaTriggers[areaTrigger->GetGUID()] = areaTrigger->GetSpellId();
+    if (IsCreature() && IsAIEnabled)
         ToCreature()->AI()->JustRegisteredAreaTrigger(areaTrigger);
 }
 
 void Unit::_UnregisterAreaTrigger(AreaTrigger* areaTrigger)
 {
-    m_areaTrigger.erase(std::remove(m_areaTrigger.begin(), m_areaTrigger.end(), areaTrigger));
-    if (GetTypeId() == TYPEID_UNIT && IsAIEnabled)
+    m_areaTriggers.erase(areaTrigger->GetGUID());
+    if (IsCreature() && IsAIEnabled)
         ToCreature()->AI()->JustUnregisteredAreaTrigger(areaTrigger);
 }
 
@@ -5166,48 +5166,51 @@ AreaTrigger* Unit::GetAreaTrigger(uint32 spellId) const
 std::vector<AreaTrigger*> Unit::GetAreaTriggers(uint32 spellId) const
 {
     std::vector<AreaTrigger*> areaTriggers;
-    for (AreaTriggerList::const_iterator i = m_areaTrigger.begin(); i != m_areaTrigger.end(); ++i)
-        if ((*i)->GetSpellId() == spellId)
-            areaTriggers.push_back(*i);
+    for (auto itr : m_areaTriggers)
+        if (itr.second == spellId)
+            if (AreaTrigger* at = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+                areaTriggers.push_back(at);
 
     return areaTriggers;
 }
 
 void Unit::RemoveAreaTrigger(uint32 spellId)
 {
-    if (m_areaTrigger.empty())
+    if (m_areaTriggers.empty())
         return;
-    for (AreaTriggerList::iterator i = m_areaTrigger.begin(); i != m_areaTrigger.end();)
-    {
-        AreaTrigger* areaTrigger = *i;
-        if (areaTrigger->GetSpellId() == spellId)
-        {
-            areaTrigger->Remove();
-            i = m_areaTrigger.begin();
-        }
-        else
-            ++i;
-    }
+
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
+        if (itr.second == spellId)
+            if (AreaTrigger* areaTrigger = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+                areaTrigger->Remove();
 }
 
 void Unit::RemoveAreaTrigger(AuraEffect const* aurEff)
 {
-    if (m_areaTrigger.empty())
+    if (m_areaTriggers.empty())
         return;
-    for (AreaTrigger* areaTrigger : m_areaTrigger)
+
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
     {
-        if (areaTrigger->GetAuraEffect() == aurEff)
+        if (AreaTrigger* areaTrigger = ObjectAccessor::GetAreaTrigger(*this, itr.first))
         {
-            areaTrigger->Remove();
-            break; // There can only be one AreaTrigger per AuraEffect
+            if (areaTrigger->GetAuraEffect() == aurEff)
+            {
+                areaTrigger->Remove();
+                break; // There can only be one AreaTrigger per AuraEffect
+            }
         }
     }
 }
 
 void Unit::RemoveAllAreaTriggers()
 {
-    while (!m_areaTrigger.empty())
-        m_areaTrigger.front()->Remove();
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
+        if (AreaTrigger* at = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+            at->Remove();
 }
 
 void Unit::SendSpellNonMeleeDamageLog(SpellNonMeleeDamage const* log)
@@ -6750,6 +6753,9 @@ float Unit::SpellDamagePctDone(Unit* victim, SpellInfo const* spellProto, Damage
     // Add SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC percent bonus
     AddPct(DoneTotalMod, GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC, spellProto->Mechanic));
 
+    if (IsPet() && GetOwner())
+        AddPct(DoneTotalMod, GetOwner()->GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_BY_PETS_PCT, spellProto->GetSchoolMask()));
+
     // Custom scripted damage
     switch (spellProto->SpellFamilyName)
     {
@@ -7598,6 +7604,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
 
             DoneTotalMod *= maxModDamagePercentSchool;
         }
+
+        if (IsPet() && GetOwner())
+            AddPct(DoneTotalMod, GetOwner()->GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_BY_PETS_PCT, spellProto->GetSchoolMask()));
     }
 
     DoneTotalMod *= GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_VERSUS, creatureTypeMask);
@@ -7821,7 +7830,7 @@ void Unit::Dismount()
     SendMessageToSet(data.Write(), true);
 
     // dismount as a vehicle
-    if (GetTypeId() == TYPEID_PLAYER && GetVehicleKit())
+    if (IsPlayer() && GetVehicleKit())
     {
         // Remove vehicle from player
         RemoveVehicleKit();
@@ -9374,11 +9383,16 @@ bool Unit::IsInFeralForm() const
 
 bool Unit::IsInDisallowedMountForm() const
 {
-    if (SpellInfo const* transformSpellInfo = sSpellMgr->GetSpellInfo(getTransForm()))
+    return IsDisallowedMountForm(getTransForm(), GetShapeshiftForm(), GetDisplayId());
+}
+
+bool Unit::IsDisallowedMountForm(uint32 spellId, ShapeshiftForm form, uint32 displayId) const
+{
+    if (SpellInfo const* transformSpellInfo = sSpellMgr->GetSpellInfo(spellId))
         if (transformSpellInfo->HasAttribute(SPELL_ATTR0_CASTABLE_WHILE_MOUNTED))
             return false;
 
-    if (ShapeshiftForm form = GetShapeshiftForm())
+    if (form)
     {
         SpellShapeshiftFormEntry const* shapeshift = sSpellShapeshiftFormStore.LookupEntry(form);
         if (!shapeshift)
@@ -9388,10 +9402,10 @@ bool Unit::IsInDisallowedMountForm() const
             return true;
     }
 
-    if (GetDisplayId() == GetNativeDisplayId())
+    if (displayId == GetNativeDisplayId())
         return false;
 
-    CreatureDisplayInfoEntry const* display = sCreatureDisplayInfoStore.LookupEntry(GetDisplayId());
+    CreatureDisplayInfoEntry const* display = sCreatureDisplayInfoStore.LookupEntry(displayId);
     if (!display)
         return true;
 
@@ -10654,7 +10668,7 @@ void Unit::SetDisplayId(uint32 modelId)
         SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, minfo->gender);
 }
 
-void Unit::RestoreDisplayId()
+void Unit::RestoreDisplayId(bool ignorePositiveAurasPreventingMounting /*= false*/)
 {
     AuraEffect* handledAura = NULL;
     // try to receive model from transform auras
@@ -10667,7 +10681,13 @@ void Unit::RestoreDisplayId()
             if (AuraApplication const* aurApp = (*i)->GetBase()->GetApplicationOfTarget(GetGUID()))
             {
                 if (!handledAura)
-                    handledAura = (*i);
+                {
+                    if (!ignorePositiveAurasPreventingMounting)
+                        handledAura = (*i);
+                    else if (CreatureTemplate const* ci = sObjectMgr->GetCreatureTemplate((*i)->GetMiscValue()))
+                        if (!IsDisallowedMountForm((*i)->GetId(), FORM_NONE, sObjectMgr->ChooseDisplayId(ci)))
+                            handledAura = (*i);
+                }
                 // prefer negative auras
                 if (!aurApp->IsPositive())
                 {
@@ -10682,7 +10702,12 @@ void Unit::RestoreDisplayId()
         handledAura->HandleEffect(this, AURA_EFFECT_HANDLE_SEND_FOR_CLIENT, true);
     // we've found shapeshift
     else if (uint32 modelId = GetModelForForm(GetShapeshiftForm()))
-        SetDisplayId(modelId);
+    {
+        if (!ignorePositiveAurasPreventingMounting || !IsDisallowedMountForm(0, GetShapeshiftForm(), modelId))
+            SetDisplayId(modelId);
+        else
+            SetDisplayId(GetNativeDisplayId());
+    }
     // no auras found - set modelid to default
     else
         SetDisplayId(GetNativeDisplayId());
@@ -12027,7 +12052,7 @@ void Unit::RemoveVehicleKit(bool onRemoveFromWorld /*= false*/)
     m_vehicleKit->Uninstall();
     delete m_vehicleKit;
 
-    m_vehicleKit = NULL;
+    m_vehicleKit = nullptr;
 
     m_updateFlag &= ~UPDATEFLAG_VEHICLE;
     m_unitTypeMask &= ~UNIT_MASK_VEHICLE;

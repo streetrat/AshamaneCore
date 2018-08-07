@@ -153,6 +153,34 @@ SpellCastTargets::SpellCastTargets(Unit* caster, WorldPackets::Spells::SpellCast
     SetPitch(spellCastRequest.MissileTrajectory.Pitch);
     SetSpeed(spellCastRequest.MissileTrajectory.Speed);
 
+    if (spellCastRequest.SendCastFlags == 8)   // Archaeology
+    {
+        uint32 kEntry, kCount, fEntry, fCount;
+        uint8 type;
+
+        for (auto const& weight : spellCastRequest.Weight)
+        {
+            type = weight.Type;
+            switch (type)
+            {
+                case 1: // Fragments
+                    fEntry = weight.ID;        // Currency id
+                    fCount = weight.Quantity;        // Currency count
+                    break;
+                case 2: // Keystones
+                    kEntry = weight.ID;        // Item id
+                    kCount = weight.Quantity;        // Item count
+                    break;
+            }
+        }
+
+        if (kCount > 0 && caster->GetTypeId() == TYPEID_PLAYER)
+            caster->ToPlayer()->DestroyItemCount(kEntry, -(int32(kCount)), true, false);
+
+        if (fCount > 0 && caster->GetTypeId() == TYPEID_PLAYER)
+            caster->ToPlayer()->ModifyCurrency(fEntry, -(int32(fCount)), false);
+    }
+
     Update(caster);
 }
 
@@ -7420,10 +7448,10 @@ SpellCastResult Spell::CanOpenLock(uint32 effIndex, uint32 lockId, SkillType& sk
 
                     // castitem check: rogue using skeleton keys. the skill values should not be added in this case.
                     skillValue = 0;
-                    if (!m_CastItem && m_caster->GetTypeId() == TYPEID_PLAYER)
-                        skillValue = m_caster->ToPlayer()->GetSkillValue(skillId);
-                    else if (lockInfo->Index[j] == LOCKTYPE_PICKLOCK)
+                    if (lockInfo->Index[j] == LOCKTYPE_PICKLOCK)
                         skillValue = m_caster->getLevel() * 5;
+                    else if (!m_CastItem && m_caster->IsPlayer())
+                        skillValue = m_caster->ToPlayer()->GetSkillValue(skillId);
 
                     // skill bonus provided by casting spell (mostly item spells)
                     // add the effect base points modifier from the spell cast (cheat lock / skeleton key etc.)
@@ -7456,7 +7484,7 @@ void Spell::SetSpellValue(SpellValueMod mod, int32 value)
 
     if (mod >= SPELLVALUE_TRIGGER_SPELL && mod < SPELLVALUE_TRIGGER_SPELL_END)
     {
-        if (SpellEffectInfo const* effect = GetEffect(mod - SPELLVALUE_TRIGGER_SPELL))
+        if (GetEffect(mod - SPELLVALUE_TRIGGER_SPELL) != nullptr)
             m_spellValue->EffectTriggerSpell[mod - SPELLVALUE_TRIGGER_SPELL] = (uint32)value;
         return;
     }

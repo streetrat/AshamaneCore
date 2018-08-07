@@ -770,7 +770,8 @@ enum TeleportToOptions
     TELE_TO_NOT_LEAVE_COMBAT    = 0x04,
     TELE_TO_NOT_UNSUMMON_PET    = 0x08,
     TELE_TO_SPELL               = 0x10,
-    TELE_TO_SEAMLESS            = 0x20
+    TELE_TO_SEAMLESS            = 0x20,
+    TELE_TO_CAST_ON_ARRIVAL     = 0x40
 };
 
 /// Type of environmental damages
@@ -1091,9 +1092,9 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         void SetObjectScale(float scale) override;
 
-        bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0);
-        bool TeleportTo(uint32 mapid, Position const &pos, uint32 options = 0);
-        bool TeleportTo(WorldLocation const &loc, uint32 options = 0);
+        bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0, uint32 optionParam = 0);
+        bool TeleportTo(uint32 mapid, Position const &pos, uint32 options = 0, uint32 optionParam = 0);
+        bool TeleportTo(WorldLocation const &loc, uint32 options = 0, uint32 optionParam = 0);
         bool TeleportTo(AreaTriggerTeleportStruct const* at);
         bool SeamlessTeleportToMap(uint32 mapid, uint32 options = 0);
         bool TeleportToBGEntryPoint();
@@ -1948,7 +1949,6 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool UpdatePosition(const Position &pos, bool teleport = false) override { return UpdatePosition(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation(), teleport); }
         void UpdateUnderwaterState(Map* m, float x, float y, float z) override;
 
-        bool MeetPlayerCondition(uint32 conditionId) const;
         bool HasWorldQuestEnabled() const;
         void UpdateWorldQuestPosition(float x, float y);
 
@@ -2009,6 +2009,9 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool IsBeingTeleportedNear() const { return mSemaphoreTeleport_Near; }
         bool IsBeingTeleportedFar() const { return mSemaphoreTeleport_Far; }
         bool IsBeingTeleportedSeamlessly() const { return IsBeingTeleportedFar() && m_teleport_options & TELE_TO_SEAMLESS; }
+        bool IsBeingTeleportedWithCastOnArrival() const { return IsBeingTeleportedFar() && m_teleport_options & TELE_TO_CAST_ON_ARRIVAL; }
+        uint32 GetOnArrivalCastSpellTeleport() const { return IsBeingTeleportedWithCastOnArrival() ? m_teleport_option_param : 0; }
+        void ResetOnArrivalCastSpellTeleport() { m_teleport_option_param = 0; }
         void SetSemaphoreTeleportNear(bool semphsetting) { mSemaphoreTeleport_Near = semphsetting; }
         void SetSemaphoreTeleportFar(bool semphsetting) { mSemaphoreTeleport_Far = semphsetting; }
         void ProcessDelayedOperations();
@@ -2533,6 +2536,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         ArchaeologyPlayerMgr& GetArchaeologyMgr() { return m_archaeologyPlayerMgr; }
 
+        bool MeetPlayerCondition(uint32 conditionId) const;
+
     protected:
         // Gamemaster whisper whitelist
         GuidList WhisperList;
@@ -2838,6 +2843,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         // Current teleport data
         WorldLocation m_teleport_dest;
         uint32 m_teleport_options;
+        uint32 m_teleport_option_param;
         bool mSemaphoreTeleport_Near;
         bool mSemaphoreTeleport_Far;
 

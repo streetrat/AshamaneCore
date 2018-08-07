@@ -266,10 +266,10 @@ struct ArtifactUnlockEntry
 {
     uint32 ID;
     uint16 ItemBonusListID;
-    uint8  PowerRank;
+    uint8 PowerRank;
     uint32 PowerID;
     uint32 PlayerConditionID;
-    uint8  ArtifactID;
+    uint8 ArtifactID;
 };
 
 struct AuctionHouseEntry
@@ -1228,12 +1228,45 @@ struct GarrFollowerEntry
     uint32 ID;
 };
 
+struct GarrFollowerLevelXPEntry
+{
+    uint32 ID;
+    uint16 XpToNextLevel;
+    uint16 ShipmentXP;
+    uint8 FollowerLevel;
+    uint8 GarrFollowerTypeId;
+};
+
+struct GarrFollowerQualityEntry
+{
+    uint32 ID;
+    uint32 XpToNextQuality;
+    uint16 ShipmentXP;
+    uint8 Quality;
+    uint8 AbilityCount;
+    uint8 TraitCount;
+    uint8 GarrFollowerTypeId;
+    uint32 ClassSpecId;
+};
+
 struct GarrFollowerXAbilityEntry
 {
     uint32 ID;
     uint16 GarrAbilityID;
     uint8 FactionIndex;
     uint16 GarrFollowerID;
+};
+
+struct GarrFollowerTypeEntry
+{
+    uint32 ID;
+    uint16 MaxItemLevel;
+    uint8 MaxFollowers;
+    uint8 MaxFollowerBuildingType;
+    uint8 GarrTypeId;
+    uint8 LevelRangeBias;
+    uint8 ItemLevelRangeBias;
+    uint8 Flags;
 };
 
 struct GarrMissionEntry

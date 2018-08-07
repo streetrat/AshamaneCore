@@ -314,6 +314,13 @@ namespace WorldPackets
         class GarrisonOpenMissionNpc;
         class GarrisonRequestScoutingMap;
         class GarrisonScoutingMapResult;
+        class GarrisonAddMissionResult;
+        class GarrisonStartMission;
+        class GarrisonStartMissionResult;
+        class GarrisonCompleteMission;
+        class GarrisonCompleteMissionResult;
+        class GarrisonMissionBonusRoll;
+        class GarrisonMissionBonusRollResult;
     }
 
     namespace Guild
@@ -502,6 +509,7 @@ namespace WorldPackets
         class AdventureJournalStartQuest;
         class StartTimer;
         class StartElapsedTimer;
+        class OpenAlliedRaceDetailsGiver;
     }
 
     namespace Movement
@@ -1759,6 +1767,9 @@ class TC_GAME_API WorldSession
         void HandleGarrisonGetBuildingLandmarks(WorldPackets::Garrison::GarrisonGetBuildingLandmarks& garrisonGetBuildingLandmarks);
         void HandleGarrisonOpenMissionNpc(WorldPackets::Garrison::GarrisonOpenMissionNpcClient& garrisonOpenMissionNpc);
         void HandleGarrisonRequestScoutingMap(WorldPackets::Garrison::GarrisonRequestScoutingMap& scoutingMap);
+        void HandleGarrisonStartMission(WorldPackets::Garrison::GarrisonStartMission& startMission);
+        void HandleGarrisonCompleteMission(WorldPackets::Garrison::GarrisonCompleteMission& completeMission);
+        void HandleGarrisonMissionBonusRoll(WorldPackets::Garrison::GarrisonMissionBonusRoll& missionBonusRoll);
 
         // Battle Pets
         void HandleBattlePetRequestJournal(WorldPackets::BattlePet::BattlePetRequestJournal& battlePetRequestJournal);
