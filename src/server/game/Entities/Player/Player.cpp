@@ -29812,9 +29812,9 @@ bool Player::Import(ObjectGuid::LowType guidlow, ObjectGuid::LowType oldGuid)
     SetXP(xp);
 
     SetUInt64Value(PLAYER_FIELD_COINAGE, money);
-    SetCurrency(CURRENCY_TYPE_APEXIS_CRYSTALS, 0);
-    SetCurrency(CURRENCY_TYPE_JUSTICE_POINTS, 0);
-    SetCurrency(CURRENCY_TYPE_ARTIFACT_KNOWLEDGE, 0);
+
+    SetCurrency(CURRENCY_TYPE_APEXIS_CRYSTALS, sWorld->getIntConfig(CONFIG_CURRENCY_START_APEXIS_CRYSTALS));
+    SetCurrency(CURRENCY_TYPE_JUSTICE_POINTS, sWorld->getIntConfig(CONFIG_CURRENCY_START_JUSTICE_POINTS));
 
     // start with every map explored
     if (sWorld->getBoolConfig(CONFIG_START_ALL_EXPLORED))
