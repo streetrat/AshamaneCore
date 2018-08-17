@@ -2497,8 +2497,8 @@ void Player::SetXP(uint32 xp)
 
     int32 playerLevelDelta = 0;
 
-    // If XP < 50%, player should see scaling creature with -1 level except for level max
-    if (getLevel() < MAX_LEVEL && xp < (GetUInt32Value(PLAYER_NEXT_LEVEL_XP) / 2))
+    // If XP < 25%, player should see scaling creature with -1 level except for level max
+    if (getLevel() < MAX_LEVEL && xp < (GetUInt32Value(PLAYER_NEXT_LEVEL_XP) / 4))
         playerLevelDelta = -1;
 
     SetInt32Value(PLAYER_FIELD_SCALING_PLAYER_LEVEL_DELTA, playerLevelDelta);
@@ -26534,9 +26534,17 @@ void Player::StoreLootItem(uint8 lootSlot, Loot* loot, AELootResult* aeResult/* 
         --loot->unlootedCount;
 
         if (sObjectMgr->GetItemTemplate(item->itemid))
+        {
             if (newitem->GetQuality() > ITEM_QUALITY_EPIC || (newitem->GetQuality() == ITEM_QUALITY_EPIC && newitem->GetItemLevel(this) >= MinNewsItemLevel))
+            {
                 if (Guild* guild = GetGuild())
                     guild->AddGuildNews(GUILD_NEWS_ITEM_LOOTED, GetGUID(), 0, item->itemid);
+
+                TC_LOG_INFO("metric", "%s(%lu) looted item %u count %u",
+                    GetName().c_str(), GetGUID().GetCounter(),
+                    item->itemid, item->count);
+            }
+        }
 
         // if aeLooting then we must delay sending out item so that it appears properly stacked in chat
         if (!aeResult)
