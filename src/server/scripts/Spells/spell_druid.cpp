@@ -1618,57 +1618,42 @@ enum RakeSpells
 };
 
 // Rake - 1822
-// @Version : 7.1.0.22908
-class spell_dru_rake : public SpellScriptLoader
+class spell_dru_rake : public SpellScript
 {
-public:
-    spell_dru_rake() : SpellScriptLoader("spell_dru_rake") { }
+    PrepareSpellScript(spell_dru_rake);
 
-    class spell_dru_rake_SpellScript : public SpellScript
+    bool Load() override
     {
-        PrepareSpellScript(spell_dru_rake_SpellScript);
+        Unit* caster = GetCaster();
+        if (caster->HasAuraType(SPELL_AURA_MOD_STEALTH))
+            m_stealthed = true;
 
-    public:
-        spell_dru_rake_SpellScript()
-        {
-            _stealthed = false;
-        }
-
-    private:
-        bool _stealthed;
-
-        bool Load() override
-        {
-            Unit* caster = GetCaster();
-            if (caster->HasAuraType(SPELL_AURA_MOD_STEALTH))
-                _stealthed = true;
-            return true;
-        }
-
-        void HandleOnHit(SpellEffIndex /*effIndex*/)
-        {
-            Unit* caster = GetCaster();
-            Unit* target = GetExplTargetUnit();
-            if (!caster || !target)
-                return;
-
-            if (this->_stealthed || caster->HasAura(SPELL_DRUID_INCARNATION_KING_OF_JUNGLE))
-            {
-                SetHitDamage(GetHitDamage() * 2);
-                caster->CastSpell(target, SPELL_DRUID_RAKE_STUN, true);
-            }
-        }
-
-        void Register() override
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_dru_rake_SpellScript::HandleOnHit, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
-        }
-    };
-
-    SpellScript* GetSpellScript() const override
-    {
-        return new spell_dru_rake_SpellScript();
+        return true;
     }
+
+    void HandleOnHit(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetExplTargetUnit();
+        if (!caster || !target)
+            return;
+
+        // While stealthed or have Incarnation: King of the Jungle aura, deal 100% increased damage
+        if (m_stealthed || caster->HasAura(SPELL_DRUID_INCARNATION_KING_OF_JUNGLE))
+            SetHitDamage(GetHitDamage() * 2);
+
+        // Only stun if the caster was in stealth
+        if (m_stealthed)
+            caster->CastSpell(target, SPELL_DRUID_RAKE_STUN, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_dru_rake::HandleOnHit, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
+
+private:
+    bool m_stealthed = false;
 };
 
 enum MaimSpells
@@ -2402,6 +2387,67 @@ private:
     bool m_awardComboPoint = true;
 };
 
+// Shred - 5221
+class spell_dru_shred : public SpellScript
+{
+    PrepareSpellScript(spell_dru_shred);
+
+    bool Load() override
+    {
+        Unit* caster = GetCaster();
+
+        if (caster->HasAuraType(SPELL_AURA_MOD_STEALTH))
+            m_stealthed = true;
+
+        if (caster->HasAura(SPELL_DRUID_INCARNATION_KING_OF_JUNGLE))
+            m_incarnation = true;
+
+        m_casterLevel = caster->GetLevelForTarget(caster);
+
+        return true;
+    }
+
+    void HandleCritChance(Unit* /*victim*/, float& chance)
+    {
+        // If caster is level >= 56, While stealthed or have Incarnation: King of the Jungle aura,
+        // Double the chance to critically strike
+        if ((m_casterLevel >= 56) && (m_stealthed || m_incarnation))
+            chance *= 2.0f;
+    }
+
+    void HandleOnEffectHitTarget(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetHitUnit();
+        if (!caster || !target)
+            return;
+
+        int32 damage = GetHitDamage();
+
+        // If caster is level >= 56, While stealthed or have Incarnation: King of the Jungle aura,
+        // deals 50% increased damage (get value from the spell data)
+        if ((m_casterLevel >= 56) && (m_stealthed || m_incarnation))
+            AddPct(damage, sSpellMgr->GetSpellInfo(SPELL_DRUID_SHRED)->GetEffect(EFFECT_3)->BasePoints);
+
+        // If caster is level >= 44 and the target is bleeding, deals 20% increased damage (get value from the spell data)
+        if ((m_casterLevel >= 44) && target->HasAuraState(AURA_STATE_BLEEDING))
+            AddPct(damage, sSpellMgr->GetSpellInfo(SPELL_DRUID_SHRED)->GetEffect(EFFECT_4)->BasePoints);
+
+        SetHitDamage(damage);
+    }
+
+    void Register() override
+    {
+        OnCalcCritChance += SpellOnCalcCritChanceFn(spell_dru_shred::HandleCritChance);
+        OnEffectHitTarget += SpellEffectFn(spell_dru_shred::HandleOnEffectHitTarget, EFFECT_4, SPELL_EFFECT_DUMMY);
+    }
+
+private:
+    bool m_stealthed = false;
+    bool m_incarnation = false;
+    int32 m_casterLevel;
+};
+
 void AddSC_druid_spell_scripts()
 {
     // Spells Scripts
@@ -2437,7 +2483,7 @@ void AddSC_druid_spell_scripts()
     new spell_dru_living_seed();
     new spell_dru_infected_wound();
     RegisterAuraScript(spell_dru_ysera_gift);
-    new spell_dru_rake();
+    RegisterSpellScript(spell_dru_rake);
     RegisterSpellScript(spell_dru_maim);
     new spell_dru_rip();
     new spell_dru_bloodtalons();
@@ -2447,6 +2493,7 @@ void AddSC_druid_spell_scripts()
     RegisterSpellScript(spell_dru_swipe);
     RegisterSpellScript(spell_dru_brutal_slash);
     RegisterSpellScript(spell_dru_thrash_cat);
+    RegisterSpellScript(spell_dru_shred);
 
     RegisterSpellScript(spell_dru_thrash_bear);
     RegisterAuraScript(aura_dru_thrash_bear);
