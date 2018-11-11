@@ -54,7 +54,6 @@ struct npc_defiant_troll : public ScriptedAI
     void Reset() override
     {
         rebuffTimer = 5000;
-        auraTimer = 0;
     }
 
     void MovementInform(uint32 /*type*/, uint32 /*id*/) override
@@ -115,8 +114,6 @@ struct npc_defiant_troll : public ScriptedAI
 
 private:
     uint32 rebuffTimer;
-    uint32 auraTimer;
-    bool work;
 };
 
 enum QuestRollingMyHomies
@@ -828,7 +825,7 @@ class spell_summon_gasbot : public SpellScript
     void HandleHit(SpellEffIndex /*effIndex*/)
     {
         GetCaster()->CastSpell(nullptr, SPELL_GASBOT_SUMMON, true);
-        GetCaster()->CastSpell(nullptr, SPELL_GASBOT_SUMMON, true);
+        GetCaster()->CastSpell(nullptr, SPELL_GASBOT_SUMMON_VISUAL, true);
     }
 
     void Register() override
@@ -1180,7 +1177,7 @@ class spell_life_saving_complete : public SpellScript
             player->AddMovieDelayedAction(22, [player]
             {
                 player->RemoveAurasDueToSpell(91847);
-                player->CastSpell(nullptr, 74100, true);
+                player->CastSpell(nullptr, 74100, true); // Life Savings: Teleport & Bind to the Lost Isles
             });
         }
     }

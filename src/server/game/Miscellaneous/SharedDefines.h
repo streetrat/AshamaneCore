@@ -1066,7 +1066,9 @@ enum TeamId
 {
     TEAM_ALLIANCE = 0,
     TEAM_HORDE,
-    TEAM_NEUTRAL
+    TEAM_NEUTRAL,
+
+    TEAM_MAX = TEAM_NEUTRAL
 };
 
 enum Team
@@ -4093,7 +4095,11 @@ enum HolidayIds
     HOLIDAY_ANNIVERSARY_9_YEARS      = 509,
     HOLIDAY_ANNIVERSARY_10_YEARS     = 514,
     HOLIDAY_CALL_TO_ARMS_DG          = 515,
-    //HOLIDAY_CALL_TO_ARMS_DG        = 516
+    //HOLIDAY_CALL_TO_ARMS_DG        = 516,
+    HOLIDAY_TIMEWALKER_WOTLK         = 559,
+    HOLIDAY_TIMEWALKER_BC            = 562,
+    HOLIDAY_TIMEWALKER_CATACLYSM     = 587,
+    HOLIDAY_TIMEWALKER_MOP           = 643,
 };
 
 enum QuestType
@@ -6329,6 +6335,12 @@ enum Maps : uint32
     MAP_TANAAN_JUNGLE_INTRO     = 1265,
     MAP_TANAAN_JUNGLE           = 1464,
     MAP_DALARAN_UNDERBELLY      = 1502,
+};
+
+enum SpecialSpells : uint32
+{
+    SPELL_MERCENARY_CONTRACT_HORDE      = 193472,
+    SPELL_MERCENARY_CONTRACT_ALLIANCE   = 193475,
 };
 
 #endif
