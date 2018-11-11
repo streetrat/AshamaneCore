@@ -3749,20 +3749,8 @@ uint8 Map::GetDifficultyLootItemContext() const
 
 uint8 Map::GetEncounterDifficultyMask() const
 {
-    uint32 difficultyId = GetDifficultyID();
-    switch (difficultyId)
-    {
-        case DIFFICULTY_NORMAL:
-        case DIFFICULTY_HEROIC:
-            return 1 << (difficultyId - DIFFICULTY_NORMAL);
-        case DIFFICULTY_10_N:
-        case DIFFICULTY_25_N:
-        case DIFFICULTY_10_HC:
-        case DIFFICULTY_25_HC:
-            return 1 << (difficultyId - DIFFICULTY_10_N);
-        default:
-            break;
-    }
+    if (DifficultyEntry const* difficulty = sDifficultyStore.LookupEntry(GetDifficultyID()))
+        return 1 << (difficulty->OrderIndex - 1);
 
     return 0xFF;
 }
@@ -4451,8 +4439,5 @@ void Map::UpdateAreaDependentAuras()
     for (Map::PlayerList::const_iterator itr = players.begin(); itr != players.end(); ++itr)
         if (Player* player = itr->GetSource())
             if (player->IsInWorld())
-            {
-                player->UpdateAreaDependentAuras(player->GetAreaId());
-                player->UpdateZoneDependentAuras(player->GetZoneId());
-            }
+                player->UpdateAreaDependentAuras();
 }

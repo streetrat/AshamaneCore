@@ -8065,6 +8065,8 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
         (*itr)->SetInCombatState(PvP, enemy);
         (*itr)->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT);
     }
+
+    ProcSkillsAndAuras(enemy, PROC_FLAG_ENTER_COMBAT, PROC_FLAG_NONE, PROC_SPELL_TYPE_MASK_ALL, PROC_SPELL_PHASE_NONE, PROC_HIT_NONE, nullptr, nullptr, nullptr);
 }
 
 void Unit::ClearInCombat()
@@ -11326,7 +11328,9 @@ void Unit::Kill(Unit* victim, bool durabilityLoss)
 
                         std::vector<JournalEncounterItemEntry const*> potentialItems;
                         for (JournalEncounterItemEntry const* item : *items)
-                            if (item->IsValidDifficultyMask(mapDifficultyMask) && sDB2Manager.HasItemContext(item->ItemID, loot->GetItemContext()))
+                            if (item->IsValidDifficultyMask(mapDifficultyMask) &&
+                                (sDB2Manager.HasItemContext(item->ItemID, loot->GetItemContext()) ||
+                                 !sDB2Manager.HasItemContext(item->ItemID)))
                                 potentialItems.push_back(item);
 
                         Trinity::Containers::RandomResize(potentialItems, 2);

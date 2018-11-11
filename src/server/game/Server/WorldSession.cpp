@@ -540,7 +540,8 @@ void WorldSession::LogoutPlayer(bool save)
         if (!_player->m_InstanceValid && !_player->IsGameMaster())
             _player->TeleportTo(_player->m_homebindMapId, _player->m_homebindX, _player->m_homebindY, _player->m_homebindZ, _player->GetOrientation());
 
-        sOutdoorPvPMgr->HandlePlayerLeaveZone(_player, _player->GetZoneId());
+        if (Area* zone = _player->GetZone())
+            sOutdoorPvPMgr->HandlePlayerLeaveZone(_player, zone);
 
         for (int i=0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
         {
@@ -1475,7 +1476,7 @@ void WorldSession::LoadRecoveries()
 
         if (newChar.GetTeamId() == TEAM_ALLIANCE)
             newChar.CompletedAchievement(8921); // Welcome in Draenor (A)
-        else 
+        else
             newChar.CompletedAchievement(8922); // Welcome in Draenor (H)
 
         // On split les items dans une liste
